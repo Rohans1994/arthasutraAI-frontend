@@ -1,0 +1,5 @@
+{
+  "name": "ArthaSutra AI",
+  "description": "An intelligent investment portfolio generator that calculates required CAGR and curates a diversified list of top Nifty 100 stocks using Gemini AI based on your financial goals and risk appetite.",
+  "requestFramePermissions": []
+}
