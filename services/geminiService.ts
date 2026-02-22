@@ -1,6 +1,6 @@
 import { PortfolioResult, InvestmentInput, RebalancerInput, RebalancerAnalysis, RebalancerRationale, HoldingAnalysis, UserHolding, ExistingPortfolioAnalysis } from "../types";
 
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = '/api';
 
 const CACHE_PREFIX = 'as_audit_v4_';
 const SIGNALS_CACHE_KEY = 'as_market_signals_v4';
