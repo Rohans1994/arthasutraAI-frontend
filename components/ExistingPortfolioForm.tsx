@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserHolding } from '../types';
-import { searchTickers } from '../services/geminiService';
+import { searchTickers, fetchZerodhaHoldings } from '../services/geminiService';
 import { auth, syncPortfolioToFirestore } from '../services/firebase';
-import { Plus, Trash2, Activity, PieChart, IndianRupee, Hash, Calculator, Loader2, Upload, FileText, AlertCircle, CheckCircle2, ShieldAlert, Copy, Check, Download } from 'lucide-react';
+import { Plus, Trash2, Activity, PieChart, IndianRupee, Hash, Calculator, Loader2, Upload, FileText, AlertCircle, CheckCircle2, ShieldAlert, Copy, Check, Download, Cloud } from 'lucide-react';
 
 interface Suggestion {
   ticker: string;
@@ -28,7 +28,7 @@ const ExistingPortfolioForm: React.FC<ExistingPortfolioFormProps> = ({ onAnalyze
   const [isSyncing, setIsSyncing] = useState(false);
   const [permissionError, setPermissionError] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchTimeoutRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,6 +42,35 @@ const ExistingPortfolioForm: React.FC<ExistingPortfolioFormProps> = ({ onAnalyze
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const [isFetchingZerodha, setIsFetchingZerodha] = useState(false);
+
+  const handleFetchZerodha = async () => {
+    if (!auth.currentUser) return;
+    setIsFetchingZerodha(true);
+    setImportError(null);
+    setImportSuccess(null);
+    try {
+      const holdingsData = await fetchZerodhaHoldings(auth.currentUser.uid);
+      const parsedHoldings: UserHolding[] = holdingsData
+        .filter((h: any) => h.quantity > 0)
+        .map((h: any) => ({
+          ticker: h.tradingsymbol,
+          quantity: h.quantity,
+          buyPrice: h.average_price,
+          currentPrice: h.last_price
+        }));
+
+      if (parsedHoldings.length === 0) throw new Error("No holdings found on Zerodha.");
+      setHoldings(parsedHoldings);
+      setImportSuccess(`Fetched ${parsedHoldings.length} stocks from Zerodha.`);
+      setTimeout(() => setImportSuccess(null), 5000);
+    } catch (err: any) {
+      setImportError(err.message || "Failed to fetch from Zerodha.");
+    } finally {
+      setIsFetchingZerodha(false);
+    }
+  };
 
   const handleCopyRules = () => {
     const rules = `rules_version = '2';
@@ -63,7 +92,7 @@ service cloud.firestore {
       setIsSearching(false);
       return;
     }
-    
+
     setIsSearching(true);
     const results = await searchTickers(query);
     setSuggestions(results);
@@ -88,7 +117,7 @@ service cloud.firestore {
 
     if (field === 'ticker') {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-      
+
       if (value.length >= 2) {
         searchTimeoutRef.current = window.setTimeout(() => {
           performSearch(index, value);
@@ -166,17 +195,17 @@ service cloud.firestore {
 
         const rows = rawRows.map(parseCSVLine);
         const headers = rows[0].map(h => h.toLowerCase());
-        
-        const tickerIdx = headers.findIndex(h => 
+
+        const tickerIdx = headers.findIndex(h =>
           h === 'instrument' || h === 'ticker' || h === 'stock symbol' || h.includes('symbol') || h.includes('stock')
         );
-        const quantityIdx = headers.findIndex(h => 
+        const quantityIdx = headers.findIndex(h =>
           h === 'qty.' || h === 'qty' || h.includes('quantity') || h.includes('units')
         );
-        const priceIdx = headers.findIndex(h => 
+        const priceIdx = headers.findIndex(h =>
           h === 'avg. cost' || h === 'average cost price' || h.includes('avg price') || h.includes('buy price') || h.includes('cost') || h.includes('purchase price')
         );
-        const currentPriceIdx = headers.findIndex(h => 
+        const currentPriceIdx = headers.findIndex(h =>
           h === 'ltp' || h === 'current market price' || h.includes('current price') || h.includes('last traded price')
         );
 
@@ -190,7 +219,7 @@ service cloud.firestore {
             const qtyStr = row[quantityIdx].replace(/[^0-9.-]/g, '');
             const priceStr = row[priceIdx].replace(/[^0-9.-]/g, '');
             const currentPriceStr = currentPriceIdx !== -1 ? row[currentPriceIdx].replace(/[^0-9.-]/g, '') : null;
-            
+
             return {
               ticker: row[tickerIdx].toUpperCase(),
               quantity: parseFloat(qtyStr) || 0,
@@ -222,7 +251,7 @@ service cloud.firestore {
         } else {
           setImportSuccess(`Imported ${parsedHoldings.length} stocks locally.`);
         }
-        
+
         if (fileInputRef.current) fileInputRef.current.value = '';
         setTimeout(() => setImportSuccess(null), 5000);
       } catch (err: any) {
@@ -251,7 +280,7 @@ service cloud.firestore {
             </h3>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">LTP from CSV prioritized & Cloud Synced</p>
           </div>
-          
+
           <div className="flex items-center gap-3">
             <input type="file" accept=".csv" onChange={handleFileUpload} ref={fileInputRef} className="hidden" />
             <button
@@ -262,6 +291,15 @@ service cloud.firestore {
             >
               <Download className="w-4 h-4" />
               Sample CSV
+            </button>
+            <button
+              type="button"
+              onClick={handleFetchZerodha}
+              disabled={isFetchingZerodha}
+              className="flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-600 rounded-xl text-sm font-bold hover:bg-orange-100 transition-colors border border-orange-200"
+            >
+              {isFetchingZerodha ? <Loader2 className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
+              Fetch Zerodha
             </button>
             <button
               type="button"
@@ -293,11 +331,11 @@ service cloud.firestore {
             </p>
             <div className="bg-slate-900 p-4 rounded-xl relative group">
               <pre className="text-[9px] text-emerald-400 font-mono overflow-x-auto">
-{`match /users/{userId}/{allPaths=**} {
+                {`match /users/{userId}/{allPaths=**} {
   allow read, write: if request.auth != null && request.auth.uid == userId;
 }`}
               </pre>
-              <button 
+              <button
                 type="button"
                 onClick={handleCopyRules}
                 className="absolute top-2 right-2 p-1.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
@@ -417,7 +455,7 @@ service cloud.firestore {
               min="1" max="30" required
             />
           </div>
-          
+
           <div className="flex flex-col items-end gap-2">
             <button
               type="submit"

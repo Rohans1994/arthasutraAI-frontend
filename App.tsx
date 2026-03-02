@@ -1,29 +1,29 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  InvestmentInput, 
-  PortfolioResult, 
-  RiskProfile, 
-  User, 
-  View, 
-  UserHolding, 
-  ExistingPortfolioAnalysis, 
-  XIRRInput, 
-  SavedRebalancerStrategy, 
-  RebalancerInput, 
-  RebalancerAnalysis, 
-  RebalancerRationale, 
-  PlanTier, 
-  SavedAuditReport 
+import {
+  InvestmentInput,
+  PortfolioResult,
+  RiskProfile,
+  User,
+  View,
+  UserHolding,
+  ExistingPortfolioAnalysis,
+  XIRRInput,
+  SavedRebalancerStrategy,
+  RebalancerInput,
+  RebalancerAnalysis,
+  RebalancerRationale,
+  PlanTier,
+  SavedAuditReport
 } from './types';
 import { generatePortfolio, analyzeExistingPortfolio } from './services/geminiService';
-import { 
-  auth, 
-  db, 
-  saveRebalancerStrategyToFirestore, 
-  getRebalancerStrategiesFromFirestore, 
-  deleteRebalancerStrategyFromFirestore, 
-  saveAuditReportToFirestore, 
-  getAuditReportsFromFirestore, 
+import {
+  auth,
+  db,
+  saveRebalancerStrategyToFirestore,
+  getRebalancerStrategiesFromFirestore,
+  deleteRebalancerStrategyFromFirestore,
+  saveAuditReportToFirestore,
+  getAuditReportsFromFirestore,
   deleteAuditReportFromFirestore,
   saveArchitectStrategyToFirestore,
   getArchitectStrategiesFromFirestore,
@@ -35,7 +35,7 @@ import Home from './components/Home';
 import PortfolioForm from './components/PortfolioForm';
 import PortfolioResults from './components/PortfolioResults';
 import ExistingPortfolioForm from './components/ExistingPortfolioForm';
-import LoanCalculator from './components/LoanCalculator'; 
+import LoanCalculator from './components/LoanCalculator';
 import FIRECalculator from './components/FIRECalculator';
 import XIRRCalculator from './components/XIRRCalculator';
 import PortfolioRebalancer from './components/PortfolioRebalancer';
@@ -45,7 +45,7 @@ import PlansPage from './components/PlansPage';
 import SubscriptionPlans from './components/SubscriptionPlans';
 import RiskWarningModal from './components/RiskWarningModal';
 import Profile from './components/Profile';
-import { 
+import {
   Activity,
   Box,
   RefreshCw,
@@ -117,7 +117,7 @@ const GenieLoader = () => (
           <div className="flex items-center gap-1">
             <Coins className="w-8 h-8 text-blue-200 fill-blue-200/20" />
             <div className="w-4 h-4 border-2 border-blue-200 rounded-sm rotate-45 flex items-center justify-center">
-               <div className="w-1 h-2 bg-blue-200 rotate-45" />
+              <div className="w-1 h-2 bg-blue-200 rotate-45" />
             </div>
           </div>
         </div>
@@ -125,7 +125,7 @@ const GenieLoader = () => (
         <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
         <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-blue-900 rounded-full blur-2xl opacity-50" />
       </div>
-      
+
       {/* Pulse rings */}
       <div className="absolute inset-0 bg-blue-800/10 rounded-[3rem] blur-xl scale-125 animate-pulse" />
       <div className="absolute inset-0 bg-blue-800/5 rounded-[3.5rem] blur-2xl scale-150 animate-pulse delay-700" />
@@ -140,14 +140,15 @@ const GenieLoader = () => (
       <div className="absolute inset-y-0 bg-gradient-to-r from-blue-900 via-blue-700 to-blue-500 rounded-full animate-[loading_2s_infinite_ease-in-out] shadow-[0_0_15px_rgba(30,58,138,0.6)]" style={{ width: '40%' }} />
     </div>
 
-    <style dangerouslySetInnerHTML={{ __html: `
+    <style dangerouslySetInnerHTML={{
+      __html: `
       @keyframes loading {
         0% { left: -40%; }
         50% { left: 30%; }
         100% { left: 100%; }
       }
     `}} />
-    
+
     <p className="mt-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">
       Synthesizing Financial Alpha
     </p>
@@ -177,13 +178,37 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
+  // Handle Zerodha Callback
+  useEffect(() => {
+    if (currentUser && window.location.pathname === '/zerodha/callback') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const requestToken = urlParams.get('request_token');
+      if (requestToken) {
+        setLoading(true);
+        import('./services/geminiService').then(({ connectZerodhaSession }) => {
+          connectZerodhaSession(requestToken, currentUser.uid).then(success => {
+            setLoading(false);
+            if (success) {
+              alert('Successfully connected to Zerodha (Token cached for 24h)');
+              window.history.replaceState({}, document.title, '/');
+              switchView('health-check');
+            } else {
+              alert('Failed to connect to Zerodha');
+              window.history.replaceState({}, document.title, '/');
+            }
+          });
+        });
+      }
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const userRef = doc(db, 'users', user.uid);
         const userSnap = await getDoc(userRef);
         let userData: User;
-        
+
         if (userSnap.exists()) {
           const data = userSnap.data();
           userData = {
@@ -205,7 +230,7 @@ const App: React.FC = () => {
         const userPKey = `as_portfolios_${user.uid}`;
         const userRKey = `as_rebalancers_${user.uid}`;
         const userAKey = `as_audits_${user.uid}`;
-        
+
         const localP = localStorage.getItem(userPKey);
         const localR = localStorage.getItem(userRKey);
         const localA = localStorage.getItem(userAKey);
@@ -214,19 +239,19 @@ const App: React.FC = () => {
         if (localA) setSavedAuditReports(JSON.parse(localA));
 
         try {
-           const [cloudArchitect, cloudR, cloudA] = await Promise.all([
-              getArchitectStrategiesFromFirestore(user.uid),
-              getRebalancerStrategiesFromFirestore(user.uid),
-              getAuditReportsFromFirestore(user.uid)
-           ]);
-           setSavedPortfolios(cloudArchitect);
-           setSavedRebalancerStrategies(cloudR);
-           setSavedAuditReports(cloudA);
-           localStorage.setItem(userPKey, JSON.stringify(cloudArchitect));
-           localStorage.setItem(userRKey, JSON.stringify(cloudR));
-           localStorage.setItem(userAKey, JSON.stringify(cloudA));
+          const [cloudArchitect, cloudR, cloudA] = await Promise.all([
+            getArchitectStrategiesFromFirestore(user.uid),
+            getRebalancerStrategiesFromFirestore(user.uid),
+            getAuditReportsFromFirestore(user.uid)
+          ]);
+          setSavedPortfolios(cloudArchitect);
+          setSavedRebalancerStrategies(cloudR);
+          setSavedAuditReports(cloudA);
+          localStorage.setItem(userPKey, JSON.stringify(cloudArchitect));
+          localStorage.setItem(userRKey, JSON.stringify(cloudR));
+          localStorage.setItem(userAKey, JSON.stringify(cloudA));
         } catch (err) {
-           console.warn("Firestore sync failed.");
+          console.warn("Firestore sync failed.");
         }
       } else {
         setCurrentUser(null);
@@ -258,7 +283,7 @@ const App: React.FC = () => {
 
   const handleSaveAudit = useCallback(async (resultData: ExistingPortfolioAnalysis) => {
     if (!currentUser) return;
-    
+
     if (savedAuditReports.length >= currentPlanLimits.audits) {
       console.warn("Audit limit reached. Auto-save skipped.");
       return;
@@ -312,15 +337,15 @@ const App: React.FC = () => {
     try {
       const data = await generatePortfolio(input);
       setResult(data);
-      
+
       // AUTO SAVE ARCHITECT STRATEGY TO FIRESTORE
       if (currentUser && savedPortfolios.length < currentPlanLimits.architect) {
         try {
           const docId = await saveArchitectStrategyToFirestore(currentUser.uid, data);
-          const newPortfolio: PortfolioResult = { 
-            ...data, 
-            id: docId, 
-            timestamp: Date.now() 
+          const newPortfolio: PortfolioResult = {
+            ...data,
+            id: docId,
+            timestamp: Date.now()
           };
           const updated = [newPortfolio, ...savedPortfolios];
           setSavedPortfolios(updated);
@@ -395,10 +420,10 @@ const App: React.FC = () => {
             <AppLogo />
             <span className="text-xl font-black tracking-tight text-slate-800 uppercase hidden sm:block">ArthaSutra AI</span>
           </button>
-          
+
           <div className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => (
-              <button 
+              <button
                 key={link.view}
                 onClick={() => switchView(link.view)}
                 className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${currentView === link.view ? `bg-blue-50 ${link.color}` : 'text-slate-500 hover:bg-slate-50'}`}
@@ -410,14 +435,14 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => switchView('subscription')} 
+            <button
+              onClick={() => switchView('subscription')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-black uppercase text-[10px] ${currentView === 'subscription' ? 'bg-blue-800 text-white' : 'text-slate-500 hover:text-slate-800'}`}
             >
               <CreditCard className="w-4 h-4" /> Plans
             </button>
-            <button 
-              onClick={() => switchView('plans')} 
+            <button
+              onClick={() => switchView('plans')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-black uppercase text-[10px] ${currentView === 'plans' ? 'bg-blue-800 text-white' : 'text-slate-500 hover:text-slate-800'}`}
             >
               <LayoutGrid className="w-4 h-4" /> Vault
@@ -434,22 +459,22 @@ const App: React.FC = () => {
 
       {isMenuOpen && (
         <div className="lg:hidden fixed inset-0 z-[60] bg-white px-6 py-6 animate-in slide-in-from-top duration-300 flex flex-col">
-           <div className="flex items-center justify-between mb-8">
-              <div className="flex items-center gap-3">
-                <AppLogo />
-                <span className="text-xl font-black tracking-tight text-slate-800 uppercase">ArthaSutra AI</span>
-              </div>
-              <button 
-                onClick={() => setIsMenuOpen(false)}
-                className="p-2 text-slate-600 bg-slate-50 rounded-full border border-slate-100 hover:bg-slate-100 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-           </div>
-           
-           <div className="flex flex-col gap-3 overflow-y-auto">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <AppLogo />
+              <span className="text-xl font-black tracking-tight text-slate-800 uppercase">ArthaSutra AI</span>
+            </div>
+            <button
+              onClick={() => setIsMenuOpen(false)}
+              className="p-2 text-slate-600 bg-slate-50 rounded-full border border-slate-100 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3 overflow-y-auto">
             {navLinks.map((link) => (
-              <button 
+              <button
                 key={link.view}
                 onClick={() => switchView(link.view)}
                 className={`flex items-center gap-4 p-4 rounded-2xl font-bold transition-all ${currentView === link.view ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-50 text-slate-700'}`}
@@ -459,22 +484,22 @@ const App: React.FC = () => {
               </button>
             ))}
             <div className="h-px bg-slate-100 my-2" />
-            <button 
+            <button
               onClick={() => switchView('subscription')}
               className="flex items-center gap-4 p-4 rounded-2xl bg-indigo-50 text-indigo-700 font-bold"
             >
-               <CreditCard className="w-6 h-6" /> Subscription Plans
+              <CreditCard className="w-6 h-6" /> Subscription Plans
             </button>
-            <button 
+            <button
               onClick={() => switchView('plans')}
               className="flex items-center gap-4 p-4 rounded-2xl bg-amber-50 text-amber-700 font-bold"
             >
-               <LayoutGrid className="w-6 h-6" /> Strategy Vault
+              <LayoutGrid className="w-6 h-6" /> Strategy Vault
             </button>
             <button onClick={handleLogout} className="flex items-center gap-4 p-4 rounded-2xl bg-rose-50 text-rose-600 font-bold mt-2">
-               <X className="w-6 h-6" /> Sign Out
+              <X className="w-6 h-6" /> Sign Out
             </button>
-           </div>
+          </div>
         </div>
       )}
 
@@ -487,44 +512,44 @@ const App: React.FC = () => {
         )}
 
         {currentView === 'home' && <Home onNavigate={switchView} />}
-        
+
         {currentView === 'architect' && (
           <div className="space-y-12">
             <div className="max-w-5xl mx-auto">
-              <PortfolioForm 
-                onGenerate={handleGenerate} 
-                isLoading={loading} 
-                initialData={lastInput} 
+              <PortfolioForm
+                onGenerate={handleGenerate}
+                isLoading={loading}
+                initialData={lastInput}
                 isLimitReached={isArchitectLimitReached}
               />
             </div>
             {result && (
-               <PortfolioResults 
-                result={result} 
+              <PortfolioResults
+                result={result}
                 onUpdateBasket={handleUpdateBasket}
                 isUpdating={loading}
                 isLimitReached={isArchitectLimitReached}
-               />
+              />
             )}
           </div>
         )}
 
         {currentView === 'health-check' && (
           <div className="space-y-12">
-             <div className="max-w-5xl mx-auto">
-               <ExistingPortfolioForm 
-                onAnalyze={handleAnalyze} 
-                isLoading={loading} 
+            <div className="max-w-5xl mx-auto">
+              <ExistingPortfolioForm
+                onAnalyze={handleAnalyze}
+                isLoading={loading}
                 isLimitReached={savedAuditReports.length >= currentPlanLimits.audits}
-               />
-             </div>
-             {analysisResult && <AnalysisResult result={analysisResult} />}
+              />
+            </div>
+            {analysisResult && <AnalysisResult result={analysisResult} />}
           </div>
         )}
 
         {currentView === 'rebalancer' && (
-          <PortfolioRebalancer 
-            savedCount={savedRebalancerStrategies.length} 
+          <PortfolioRebalancer
+            savedCount={savedRebalancerStrategies.length}
             isLimitReached={isRebalancerLimitReached}
             onSave={async (input, analysis, aiRationale) => {
               if (!currentUser) return;
@@ -551,8 +576,8 @@ const App: React.FC = () => {
         {currentView === 'xirr-vault' && <XIRRCalculator initialData={prefilledXirrData} />}
         {currentView === 'loan-shield' && <LoanCalculator />}
         {currentView === 'plans' && (
-          <PlansPage 
-            plans={savedPortfolios} 
+          <PlansPage
+            plans={savedPortfolios}
             rebalancerStrategies={savedRebalancerStrategies}
             auditReports={savedAuditReports}
             architectLimit={currentPlanLimits.architect}
@@ -560,12 +585,12 @@ const App: React.FC = () => {
             auditLimit={currentPlanLimits.audits}
             onDelete={handleDeletePortfolio}
             onDeleteRebalancer={(id) => {
-               deleteRebalancerStrategyFromFirestore(currentUser!.uid, id);
-               setSavedRebalancerStrategies(prev => prev.filter(s => s.id !== id));
+              deleteRebalancerStrategyFromFirestore(currentUser!.uid, id);
+              setSavedRebalancerStrategies(prev => prev.filter(s => s.id !== id));
             }}
             onDeleteAudit={(id) => {
-               deleteAuditReportFromFirestore(currentUser!.uid, id);
-               setSavedAuditReports(prev => prev.filter(a => a.id !== id));
+              deleteAuditReportFromFirestore(currentUser!.uid, id);
+              setSavedAuditReports(prev => prev.filter(a => a.id !== id));
             }}
             onView={(plan) => { setResult(plan); switchView('architect'); }}
             onViewRebalancer={() => switchView('rebalancer')}
@@ -573,7 +598,7 @@ const App: React.FC = () => {
             onUpgrade={() => switchView('subscription')}
           />
         )}
-        {currentView === 'subscription' && <SubscriptionPlans currentTier={currentUser.planTier} onEnroll={(tier) => setCurrentUser({...currentUser, planTier: tier})} />}
+        {currentView === 'subscription' && <SubscriptionPlans currentTier={currentUser.planTier} onEnroll={(tier) => setCurrentUser({ ...currentUser, planTier: tier })} />}
         {currentView === 'profile' && <Profile user={currentUser} onUpdate={setCurrentUser} onLogout={handleLogout} />}
       </main>
 

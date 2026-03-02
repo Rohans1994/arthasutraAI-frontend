@@ -266,3 +266,38 @@ export async function analyzeExistingPortfolio(
     throw error;
   }
 }
+
+// Zerodha Integration Methods
+
+export async function getZerodhaLoginUrl(): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/zerodha/login`);
+  const data = await res.json();
+  return data.url;
+}
+
+export async function connectZerodhaSession(requestToken: string, uid: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/zerodha/callback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestToken, uid })
+    });
+    const data = await res.json();
+    return data.success === true;
+  } catch (e) {
+    console.error("Zerodha Session error:", e);
+    return false;
+  }
+}
+
+export async function fetchZerodhaHoldings(uid: string): Promise<any> {
+  const res = await fetch(`${API_BASE_URL}/zerodha/holdings?uid=${uid}`);
+  if (!res.ok) {
+    throw new Error('Failed to fetch Zerodha holdings');
+  }
+  const data = await res.json();
+  if (!data.success) {
+    throw new Error(data.error || 'Failed to fetch Zerodha holdings');
+  }
+  return data.holdings;
+}
